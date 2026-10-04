@@ -1,67 +1,56 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Pool } = require('pg');
 const crypto = require('crypto');
 
-const DB_PATH = path.join(__dirname, 'scoreboard.sqlite');
-const db = new sqlite3.Database(DB_PATH);
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' 
+        ? { rejectUnauthorized: false } 
+        : false
+});
 
 // =========================
-// INIT
+// INIT DATABASE
 // =========================
 
-function initDatabase() {
-    return new Promise((resolve, reject) => {
-        db.serialize(() => {
+async function initDatabase() {
+    const client = await pool.connect();
 
-            // Boards table
-            db.run(`
-                CREATE TABLE IF NOT EXISTS boards (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    board_id TEXT UNIQUE NOT NULL,
-                    team_a_name TEXT DEFAULT 'المخربين',
-                    team_b_name TEXT DEFAULT 'المساعدين',
-                    team_a_score INTEGER DEFAULT 0,
-                    team_b_score INTEGER DEFAULT 0,
-                    created_at INTEGER DEFAULT (strftime('%s','now'))
-                )
-            `, (err) => {
-                if (err) return reject(err);
-                console.log('✅ Database initialized');
-                resolve();
-            });
-        });
-    });
+    try {
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS boards (
+                id SERIAL PRIMARY KEY,
+                board_id TEXT UNIQUE NOT NULL,
+                team_a_name TEXT DEFAULT 'المخربين',
+                team_b_name TEXT DEFAULT 'المساعدين',
+                team_a_score INTEGER DEFAULT 0,
+                team_b_score INTEGER DEFAULT 0,
+                created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())
+            )
+        `);
+
+        console.log('✅ Database initialized');
+    } finally {
+        client.release();
+    }
 }
 
 // =========================
 // HELPERS
 // =========================
 
-function run(sql, params = []) {
-    return new Promise((resolve, reject) => {
-        db.run(sql, params, function (err) {
-            if (err) reject(err);
-            else resolve({ id: this.lastID, changes: this.changes });
-        });
-    });
+async function run(sql, params = []) {
+    const result = await pool.query(sql, params);
+    return { rows: result.rows, rowCount: result.rowCount };
 }
 
-function get(sql, params = []) {
-    return new Promise((resolve, reject) => {
-        db.get(sql, params, (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-        });
-    });
+async function get(sql, params = []) {
+    const result = await pool.query(sql, params);
+    return result.rows[0];
 }
 
-function all(sql, params = []) {
-    return new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows);
-        });
-    });
+async function all(sql, params = []) {
+    const result = await pool.query(sql, params);
+    return result.rows;
 }
 
 // =========================
@@ -73,7 +62,7 @@ function generateBoardId() {
 }
 
 module.exports = {
-    db,
+    pool,
     initDatabase,
     run,
     get,
