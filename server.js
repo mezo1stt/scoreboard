@@ -1,11 +1,10 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
 const { initDatabase, run, get, all, generateBoardId } = require('./database');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // =========================
 // CONFIG FILE
@@ -35,23 +34,32 @@ function saveConfig(config) {
 let DEVICE_BOARD_ID = null;
 
 async function getDeviceBoardId() {
-    let config = loadConfig();
-
-    if (config.board_id) {
-        DEVICE_BOARD_ID = config.board_id;
+    // 1) Environment Variable (أولوية أولى)
+    if (process.env.BOARD_ID) {
+        DEVICE_BOARD_ID = process.env.BOARD_ID;
     } else {
-        DEVICE_BOARD_ID = generateBoardId();
-        config.board_id = DEVICE_BOARD_ID;
-        saveConfig(config);
+        // 2) config.json
+        let config = loadConfig();
+        if (config.board_id) {
+            DEVICE_BOARD_ID = config.board_id;
+        } else {
+            // 3) جديد
+            DEVICE_BOARD_ID = generateBoardId();
+            config.board_id = DEVICE_BOARD_ID;
+            saveConfig(config);
+        }
     }
 
     const existing = await get(
-        `SELECT * FROM boards WHERE board_id = ?`,
+        `SELECT * FROM boards WHERE board_id = $1`,
         [DEVICE_BOARD_ID]
     );
 
     if (!existing) {
-        await run(`INSERT INTO boards (board_id) VALUES (?)`, [DEVICE_BOARD_ID]);
+        await run(
+            `INSERT INTO boards (board_id) VALUES ($1)`,
+            [DEVICE_BOARD_ID]
+        );
         console.log('✅ Board created:', DEVICE_BOARD_ID);
     } else {
         console.log('✅ Board loaded:', DEVICE_BOARD_ID);
@@ -89,7 +97,7 @@ app.get('/api/device-board', async (req, res) => {
 app.get('/api/board/:id', async (req, res) => {
     try {
         const board = await get(
-            `SELECT * FROM boards WHERE board_id = ?`,
+            `SELECT * FROM boards WHERE board_id = $1`,
             [req.params.id]
         );
 
@@ -98,6 +106,7 @@ app.get('/api/board/:id', async (req, res) => {
         res.set('Cache-Control', 'no-store');
         res.json({ success: true, board });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Server error' });
     }
 });
@@ -114,7 +123,11 @@ app.post('/api/board/:id/score', async (req, res) => {
             return res.status(400).json({ error: 'Invalid team' });
         }
 
-        const board = await get(`SELECT * FROM boards WHERE board_id = ?`, [req.params.id]);
+        const board = await get(
+            `SELECT * FROM boards WHERE board_id = $1`,
+            [req.params.id]
+        );
+
         if (!board) return res.status(404).json({ error: 'Board not found' });
 
         const column = team === 'a' ? 'team_a_score' : 'team_b_score';
@@ -126,10 +139,14 @@ app.post('/api/board/:id/score', async (req, res) => {
         else if (action === 'set') newScore = val;
         else if (action === 'reset') newScore = 0;
 
-        await run(`UPDATE boards SET ${column} = ? WHERE board_id = ?`, [newScore, req.params.id]);
+        await run(
+            `UPDATE boards SET ${column} = $1 WHERE board_id = $2`,
+            [newScore, req.params.id]
+        );
 
         res.json({ success: true, score: newScore });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Server error' });
     }
 });
@@ -142,11 +159,12 @@ app.post('/api/board/:id/names', async (req, res) => {
     try {
         const { team_a_name, team_b_name } = req.body;
         await run(
-            `UPDATE boards SET team_a_name = ?, team_b_name = ? WHERE board_id = ?`,
+            `UPDATE boards SET team_a_name = $1, team_b_name = $2 WHERE board_id = $3`,
             [team_a_name || 'المخربين', team_b_name || 'المساعدين', req.params.id]
         );
         res.json({ success: true });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Server error' });
     }
 });
@@ -160,7 +178,11 @@ async function addPoints(team, points) {
 
     if (!['a', 'b'].includes(team)) team = 'a';
 
-    const board = await get(`SELECT * FROM boards WHERE board_id = ?`, [DEVICE_BOARD_ID]);
+    const board = await get(
+        `SELECT * FROM boards WHERE board_id = $1`,
+        [DEVICE_BOARD_ID]
+    );
+
     if (!board) {
         console.log('❌ Board not found');
         return null;
@@ -169,14 +191,17 @@ async function addPoints(team, points) {
     const column = team === 'a' ? 'team_a_score' : 'team_b_score';
     const newScore = board[column] + points;
 
-    await run(`UPDATE boards SET ${column} = ? WHERE board_id = ?`, [newScore, DEVICE_BOARD_ID]);
+    await run(
+        `UPDATE boards SET ${column} = $1 WHERE board_id = $2`,
+        [newScore, DEVICE_BOARD_ID]
+    );
 
     console.log(`✅ +${points} → team ${team} (new: ${newScore})`);
     return newScore;
 }
 
 // =========================
-// TRIGGER (GET + POST) — يشتغل من TikFinity
+// TRIGGER (GET + POST)
 // =========================
 
 app.all('/trigger', async (req, res) => {
@@ -185,20 +210,20 @@ app.all('/trigger', async (req, res) => {
 
         let { team, action, value } = params;
 
-        // قيم افتراضية
         team = team || 'a';
         action = action || 'add';
         value = parseInt(value);
 
         if (isNaN(value)) value = 1;
-
-        if (!['a', 'b'].includes(team)) {
-            return res.status(400).send('Invalid team');
-        }
+        if (!['a', 'b'].includes(team)) team = 'a';
 
         if (!DEVICE_BOARD_ID) await getDeviceBoardId();
 
-        const board = await get(`SELECT * FROM boards WHERE board_id = ?`, [DEVICE_BOARD_ID]);
+        const board = await get(
+            `SELECT * FROM boards WHERE board_id = $1`,
+            [DEVICE_BOARD_ID]
+        );
+
         if (!board) return res.status(404).send('Board not found');
 
         const column = team === 'a' ? 'team_a_score' : 'team_b_score';
@@ -209,7 +234,10 @@ app.all('/trigger', async (req, res) => {
         else if (action === 'set') newScore = value;
         else if (action === 'reset') newScore = 0;
 
-        await run(`UPDATE boards SET ${column} = ? WHERE board_id = ?`, [newScore, DEVICE_BOARD_ID]);
+        await run(
+            `UPDATE boards SET ${column} = $1 WHERE board_id = $2`,
+            [newScore, DEVICE_BOARD_ID]
+        );
 
         console.log(`⚡ /trigger → +${value} to team ${team} (new: ${newScore})`);
 
@@ -222,7 +250,7 @@ app.all('/trigger', async (req, res) => {
 });
 
 // =========================
-// TIKTOK-TRIGGER (مبسط لـ TikFinity)
+// TIKTOK-TRIGGER (مبسط)
 // =========================
 
 app.all('/tiktok-trigger', async (req, res) => {
@@ -237,13 +265,20 @@ app.all('/tiktok-trigger', async (req, res) => {
 
         if (!DEVICE_BOARD_ID) await getDeviceBoardId();
 
-        const board = await get(`SELECT * FROM boards WHERE board_id = ?`, [DEVICE_BOARD_ID]);
+        const board = await get(
+            `SELECT * FROM boards WHERE board_id = $1`,
+            [DEVICE_BOARD_ID]
+        );
+
         if (!board) return res.status(404).send('Board not found');
 
         const column = team === 'a' ? 'team_a_score' : 'team_b_score';
         const newScore = board[column] + value;
 
-        await run(`UPDATE boards SET ${column} = ? WHERE board_id = ?`, [newScore, DEVICE_BOARD_ID]);
+        await run(
+            `UPDATE boards SET ${column} = $1 WHERE board_id = $2`,
+            [newScore, DEVICE_BOARD_ID]
+        );
 
         console.log(`⚡ /tiktok-trigger → +${value} to team ${team} (new: ${newScore})`);
 
@@ -269,7 +304,6 @@ async function handleTikFinityEvent(event) {
     const username = event.username || '';
     const nickname = event.nickname || '';
 
-    // Gift
     if (giftName && giftId) {
         console.log(`🎁 Gift: ${giftName} x${repeatCount} from ${nickname}`);
 
@@ -296,19 +330,16 @@ async function handleTikFinityEvent(event) {
         return await addPoints(team, points);
     }
 
-    // Like
     if (likeCount > 0) {
         const points = Math.floor(likeCount / 10);
         if (points > 0) return await addPoints('b', points);
         return null;
     }
 
-    // Subscribe
     if (subMonth > 0) {
         return await addPoints('b', 50);
     }
 
-    // Follow
     if (username && !giftName && likeCount === 0) {
         return await addPoints('b', 5);
     }
@@ -350,13 +381,8 @@ async function start() {
         app.listen(PORT, () => {
             console.log('');
             console.log('🚀 Scoreboard running!');
-            console.log(`🌐 http://localhost:${PORT}`);
+            console.log(`🌐 Port: ${PORT}`);
             console.log(`📋 Board ID: ${DEVICE_BOARD_ID}`);
-            console.log('');
-            console.log('📌 Links for TikFinity:');
-            console.log(`   http://localhost:${PORT}/tiktok-webhook`);
-            console.log(`   http://localhost:${PORT}/tiktok-trigger?team=a&value=5`);
-            console.log(`   http://localhost:${PORT}/trigger?team=a&action=add&value=5`);
             console.log('');
         });
     } catch (err) {
