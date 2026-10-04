@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Scoreboard — Live</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="board-body">
+
+    <div class="board-container">
+
+        <!-- HEADER -->
+        <div class="board-header">
+            <div class="board-title">
+                <h1>⚡ NEON SCOREBOARD</h1>
+                <p class="board-id-display">
+                    Board ID: <span id="boardIdDisplay">-</span>
+                </p>
+            </div>
+            <div class="header-buttons">
+                <button class="btn-copy" id="copyBtn" title="نسخ رابط التحكم">📋 Copy Control Link</button>
+                <button class="btn-copy btn-copy-display" id="copyDisplayBtn" title="نسخ رابط العرض">🎥 Copy Display Link</button>
+            </div>
+        </div>
+
+        <!-- MAIN TITLE -->
+        <div class="board-main-title">
+            <h2>🏆 تحدي الأساطير 🏆</h2>
+        </div>
+
+        <!-- TEAMS -->
+        <div class="teams-grid">
+
+            <!-- TEAM A: المخربين -->
+            <div class="team-card team-red">
+                <div class="team-header">
+                    <span class="team-icon">🔥</span>
+                    <input type="text" class="team-name-input" id="teamAName" value="المخربين" maxlength="20">
+                </div>
+
+                <div class="team-score" id="teamAScore">0</div>
+            </div>
+
+            <!-- TEAM B: المساعدين -->
+            <div class="team-card team-green">
+                <div class="team-header">
+                    <span class="team-icon">💚</span>
+                    <input type="text" class="team-name-input" id="teamBName" value="المساعدين" maxlength="20">
+                </div>
+
+                <div class="team-score" id="teamBScore">0</div>
+            </div>
+
+        </div>
+
+        <!-- CONTROLS -->
+        <div class="controls-section">
+
+            <div class="controls-team controls-red">
+                <h3 class="controls-title">🔥 المخربين</h3>
+                <div class="controls-grid">
+                    <button class="ctrl-btn ctrl-plus" data-team="a" data-action="add" data-value="1">+1</button>
+                    <button class="ctrl-btn ctrl-plus" data-team="a" data-action="add" data-value="5">+5</button>
+                    <button class="ctrl-btn ctrl-plus" data-team="a" data-action="add" data-value="10">+10</button>
+                    <button class="ctrl-btn ctrl-minus" data-team="a" data-action="subtract" data-value="1">-1</button>
+                    <button class="ctrl-btn ctrl-minus" data-team="a" data-action="subtract" data-value="5">-5</button>
+                    <button class="ctrl-btn ctrl-reset" data-team="a" data-action="reset">↺</button>
+                </div>
+            </div>
+
+            <div class="controls-team controls-green">
+                <h3 class="controls-title">💚 المساعدين</h3>
+                <div class="controls-grid">
+                    <button class="ctrl-btn ctrl-plus" data-team="b" data-action="add" data-value="1">+1</button>
+                    <button class="ctrl-btn ctrl-plus" data-team="b" data-action="add" data-value="5">+5</button>
+                    <button class="ctrl-btn ctrl-plus" data-team="b" data-action="add" data-value="10">+10</button>
+                    <button class="ctrl-btn ctrl-minus" data-team="b" data-action="subtract" data-value="1">-1</button>
+                    <button class="ctrl-btn ctrl-minus" data-team="b" data-action="subtract" data-value="5">-5</button>
+                    <button class="ctrl-btn ctrl-reset" data-team="b" data-action="reset">↺</button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- FULL RESET -->
+        <div class="board-footer">
+            <button class="btn-fullreset" id="fullResetBtn">🔄 Reset All</button>
+        </div>
+
+    </div>
+
+    <script>
+        let boardId = new URLSearchParams(window.location.search).get('id');
+
+        // لو مفيش id → هات الـ ID الثابت من السيرفر
+        if (!boardId) {
+            fetch('/api/device-board')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        boardId = data.board_id;
+                        document.getElementById('boardIdDisplay').textContent = boardId;
+                        loadBoard();
+                        startAutoRefresh();
+                    }
+                });
+        } else {
+            document.getElementById('boardIdDisplay').textContent = boardId;
+            loadBoard();
+            startAutoRefresh();
+        }
+
+        // Copy control link
+        document.getElementById('copyBtn').addEventListener('click', () => {
+            const url = window.location.origin + '/board.html?id=' + boardId;
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = document.getElementById('copyBtn');
+                const oldText = btn.textContent;
+                btn.textContent = '✅ Copied!';
+                setTimeout(() => btn.textContent = oldText, 1500);
+            });
+        });
+
+        // Copy display link
+        document.getElementById('copyDisplayBtn').addEventListener('click', () => {
+            const url = window.location.origin + '/display.html?id=' + boardId;
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = document.getElementById('copyDisplayBtn');
+                const oldText = btn.textContent;
+                btn.textContent = '✅ Copied!';
+                setTimeout(() => btn.textContent = oldText, 1500);
+            });
+        });
+
+        async function loadBoard() {
+            if (!boardId) return;
+            try {
+                const res = await fetch('/api/board/' + boardId + '?t=' + Date.now());
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('teamAName').value = data.board.team_a_name;
+                    document.getElementById('teamBName').value = data.board.team_b_name;
+                    document.getElementById('teamAScore').textContent = data.board.team_a_score;
+                    document.getElementById('teamBScore').textContent = data.board.team_b_score;
+                }
+            } catch (err) {
+                console.error('Load failed:', err);
+            }
+        }
+
+        function startAutoRefresh() {
+            setInterval(loadBoard, 300);
+        }
+
+        document.querySelectorAll('.ctrl-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!boardId) return;
+                const team = btn.dataset.team;
+                const action = btn.dataset.action;
+                const value = parseInt(btn.dataset.value) || 0;
+
+                try {
+                    await fetch('/api/board/' + boardId + '/score', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ team, action, value })
+                    });
+                    loadBoard();
+                } catch (err) {
+                    console.error('Update failed:', err);
+                }
+            });
+        });
+
+        document.getElementById('fullResetBtn').addEventListener('click', async () => {
+            if (!boardId) return;
+            if (!confirm('متأكد إنك عايز تصفر كل النقاط؟')) return;
+
+            await fetch('/api/board/' + boardId + '/score', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ team: 'a', action: 'reset' })
+            });
+
+            await fetch('/api/board/' + boardId + '/score', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ team: 'b', action: 'reset' })
+            });
+
+            loadBoard();
+        });
+
+        // Update team names
+        document.getElementById('teamAName').addEventListener('blur', async () => {
+            if (!boardId) return;
+            await fetch('/api/board/' + boardId + '/names', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    team_a_name: document.getElementById('teamAName').value,
+                    team_b_name: document.getElementById('teamBName').value
+                })
+            });
+        });
+
+        document.getElementById('teamBName').addEventListener('blur', async () => {
+            if (!boardId) return;
+            await fetch('/api/board/' + boardId + '/names', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    team_a_name: document.getElementById('teamAName').value,
+                    team_b_name: document.getElementById('teamBName').value
+                })
+            });
+        });
+    </script>
+
+</body>
+</html>

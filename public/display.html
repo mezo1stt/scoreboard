@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Mode</title>
+    <link rel="stylesheet" href="/css/display.css">
+</head>
+<body class="display-body">
+
+    <div class="display-wrap">
+
+        <div class="display-team display-red">
+            <div class="display-name" id="teamAName">المخربين</div>
+            <div class="display-score" id="teamAScore">0</div>
+        </div>
+
+        <div class="display-title">🏆 تحدي الأساطير 🏆</div>
+
+        <div class="display-team display-green">
+            <div class="display-name" id="teamBName">المساعدين</div>
+            <div class="display-score" id="teamBScore">0</div>
+        </div>
+
+    </div>
+
+    <script>
+        let boardId = new URLSearchParams(window.location.search).get('id');
+
+        if (!boardId) {
+            fetch('/api/device-board')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        boardId = data.board_id;
+                        loadBoard();
+                        setInterval(loadBoard, 200);
+                    }
+                });
+        } else {
+            loadBoard();
+            setInterval(loadBoard, 200);
+        }
+
+        // ضبط حجم الخط حسب عدد الأرقام
+        function fitScore(el) {
+            const len = el.textContent.length;
+
+            if (len <= 4) el.style.fontSize = '90px';
+            else if (len === 5) el.style.fontSize = '75px';
+            else if (len === 6) el.style.fontSize = '62px';
+            else if (len === 7) el.style.fontSize = '52px';
+            else if (len === 8) el.style.fontSize = '44px';
+            else if (len === 9) el.style.fontSize = '38px';
+            else if (len === 10) el.style.fontSize = '32px';
+            else if (len === 11) el.style.fontSize = '28px';
+            else if (len === 12) el.style.fontSize = '24px';
+            else el.style.fontSize = '20px';
+        }
+
+        async function loadBoard() {
+            if (!boardId) return;
+            try {
+                const res = await fetch('/api/board/' + boardId + '?t=' + Date.now());
+                const data = await res.json();
+
+                if (data.success) {
+                    const elA = document.getElementById('teamAName');
+                    const elB = document.getElementById('teamBName');
+                    const elAS = document.getElementById('teamAScore');
+                    const elBS = document.getElementById('teamBScore');
+
+                    if (elA.textContent !== data.board.team_a_name) {
+                        elA.textContent = data.board.team_a_name;
+                    }
+                    if (elB.textContent !== data.board.team_b_name) {
+                        elB.textContent = data.board.team_b_name;
+                    }
+
+                    const aScore = String(data.board.team_a_score);
+                    const bScore = String(data.board.team_b_score);
+
+                    if (elAS.textContent !== aScore) {
+                        elAS.textContent = aScore;
+                        fitScore(elAS);
+                    }
+                    if (elBS.textContent !== bScore) {
+                        elBS.textContent = bScore;
+                        fitScore(elBS);
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    </script>
+
+</body>
+</html>

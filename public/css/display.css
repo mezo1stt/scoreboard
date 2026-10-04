@@ -1,0 +1,123 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    font-family: 'Cairo', 'Segoe UI', sans-serif;
+}
+
+.display-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: transparent;
+    min-height: 100vh;
+}
+
+.display-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 25px;
+    flex-wrap: nowrap;
+}
+
+/* =========================
+   TEAM CARD - حجم ثابت
+   ========================= */
+
+.display-team {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    border-radius: 18px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+
+    /* ✅ حجم ثابت */
+    width: 320px;
+    height: 180px;
+
+    overflow: hidden;
+    justify-content: center;
+}
+
+/* RED */
+.display-red {
+    border: 2px solid #ff2a4a;
+    box-shadow: 0 0 18px rgba(255, 42, 74, 0.5);
+}
+
+.display-red .display-name {
+    color: #ff5577;
+    text-shadow: 0 0 8px rgba(255, 42, 74, 0.6);
+}
+
+.display-red .display-score {
+    color: #ff5577;
+    text-shadow: 
+        0 0 6px rgba(255, 42, 74, 0.6),
+        0 0 12px rgba(255, 42, 74, 0.3);
+}
+
+/* GREEN */
+.display-green {
+    border: 2px solid #22ff88;
+    box-shadow: 0 0 18px rgba(34, 255, 136, 0.5);
+}
+
+.display-green .display-name {
+    color: #22ff88;
+    text-shadow: 0 0 8px rgba(34, 255, 136, 0.6);
+}
+
+.display-green .display-score {
+    color: #22ff88;
+    text-shadow: 
+        0 0 6px rgba(34, 255, 136, 0.6),
+        0 0 12px rgba(34, 255, 136, 0.3);
+}
+
+.display-name {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 2px;
+}
+
+/* =========================
+   SCORE - الحجم ثابت بس الخط بيتصغر
+   ========================= */
+
+.display-score {
+    font-weight: 900;
+    line-height: 1;
+    font-family: 'Consolas', monospace;
+    font-size: 80px; /* default */
+    text-align: center;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* TITLE (بين الفريقين) */
+.display-title {
+    font-size: 36px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    background: linear-gradient(90deg, #ff2a4a, #ffffff, #22ff88);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    white-space: nowrap;
+    text-align: center;
+}
